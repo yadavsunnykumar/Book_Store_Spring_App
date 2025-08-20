@@ -1,32 +1,51 @@
 version: 2.1
 
+executors:
+  java-executor:
+    docker:
+      - image: cimg/openjdk:17.0 # OpenJDK 17
+    working_directory: ~/repo
+
 jobs:
   build:
-    docker:
-      - image: cimg/openjdk:17.0
+    executor: java-executor
     steps:
       - checkout
-      - run: ./gradlew build -x test
+
+      # Cache Gradle dependencies
+      - restore_cache:
+          keys:
+            - v1-gradle-{{ checksum "build.gradle" }}
+            - v1-gradle-
+      - run: ./gradlew dependencies
+      - save_cache:
+          paths:
+            - ~/.gradle
+          key: v1-gradle-{{ checksum "build.gradle" }}
+
+      # Build Spring Boot JAR
+      - run: ./gradlew clean build -x test
+
+      # Save JAR for deploy step
+      - persist_to_workspace:
+          root: .
+          paths:
+            - build/libs/*.jar
 
   deploy:
-    docker:
-      - image: cimg/openjdk:17.0
+    executor: java-executor
     steps:
       - checkout
-      - run:
-          name: Install Heroku CLI
-          command: curl https://cli-assets.heroku.com/install.sh | sh
+      - attach_workspace:
+          at: .
       - run:
           name: Deploy to Heroku
           command: |
-            echo "machine api.heroku.com login=$HEROKU_EMAIL password=$HEROKU_API_KEY" > ~/.netrc
-            echo "machine git.heroku.com login=$HEROKU_EMAIL password=$HEROKU_API_KEY" >> ~/.netrc
-            chmod 600 ~/.netrc
-            git remote add heroku https://git.heroku.com/$HEROKU_APP_NAME.git
-            git push heroku HEAD:main -f
+            curl https://cli-assets.heroku.com/install.sh | sh
+            echo "$HEROKU_API_KEY" | heroku auth:token
+            heroku deploy:jar build/libs/*.jar --app book-store-spring-app --jdk 17
 
 workflows:
-  version: 2
   build_and_deploy:
     jobs:
       - build
