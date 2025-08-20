@@ -3,28 +3,10 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: cimg/openjdk:17.0 # Use JDK 17, adjust if your project uses another
+      - image: cimg/openjdk:17.0  # Use Java 17
     steps:
       - checkout
-
-      # Restore Gradle cache
-      - restore_cache:
-          keys:
-            - gradle-{{ checksum "build.gradle" }}
-            - gradle-
-
-      # Download dependencies
-      - run: ./gradlew dependencies
-
-      # Save Gradle cache
-      - save_cache:
-          paths:
-            - ~/.gradle/caches
-            - ~/.gradle/wrapper
-          key: gradle-{{ checksum "build.gradle" }}
-
-      # Run build + tests
-      - run: ./gradlew clean build
+      - run: ./gradlew clean build --no-daemon
 
 workflows:
   build_and_test:
